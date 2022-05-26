@@ -1,0 +1,380 @@
+:root {
+    --sc_default_color: hsl(0deg 0% 70%);
+    --sc_primary: hsl(200deg 80% 50%);
+    --sc_secondary: hsl(187deg 100% 42%);
+    --sc_warning: hsl(40deg 80% 51%);
+    --sc_danger: hsl(0deg 90% 58%);
+    --sc_success: hsl(100deg 60% 50%);
+    --sc_title_color: hsl(0deg 0% 20%);
+    --sc_color: hsl(0deg 0% 40%);
+}
+
+
+/* notification message style start */
+
+    .sc_notification_wraper {
+        position: fixed;
+        top: 5%;
+        right: 2%;
+        min-height: 0;
+        min-width: 0;
+        height: 100vh;
+        padding: 15px;
+        overflow: auto;
+        pointer-events: none;
+    }
+
+    .sc_notification {
+        pointer-events: auto;
+        --color: var(--sc_default_color);
+        --noteification_gap: 15px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        box-shadow: 0 1px 5px #0001, 0 1px 15px #0002;
+        gap: var(--noteification_gap);
+        width: fit-content;
+        padding: 0 5px 0 0;
+        position: relative;
+        border-radius: 5px;
+        margin-bottom: 15px;
+        font-family: var(--font);
+        animation: sc_notification_open 0.3s cubic-bezier(0.71, 1.07, 0.69, 1.18);
+        animation-fill-mode: both;
+        background-color: #fff;
+        position: relative;
+        max-width: 400px;
+    }
+    .sc_notification::after {
+        content: "";
+        position: absolute;
+        left: 50%;
+        bottom: 0;
+        transform: translateX(-50%);
+        width: 95%;
+        height: 3px;
+        background-color: var(--color);
+        opacity: 0.4;
+        animation: sc_notification_timeDown var(--delay) linear;
+        animation-fill-mode: both;
+    }
+    .sc_notification.sc_close_animation {
+        animation: sc_notification_close 0.4s cubic-bezier(0.71, 1.07, 0.69, 1.18);
+        animation-fill-mode: both;
+    }
+    .sc_notification.sc_primary {
+        --color: var(--sc_primary);
+    }
+    .sc_notification.sc_secondary {
+        --color: var(--sc_secondary);
+    }
+    .sc_notification.sc_success {
+        --color: var(--sc_success);
+    }
+    .sc_notification.sc_warning {
+        --color: var(--sc_warning);
+    }
+    .sc_notification.sc_danger {
+        --color: var(--sc_danger);
+    }
+    .sc_notification::before {
+        content: "";
+        position: absolute;
+        left: 10px;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        width: 3px;
+        height: 80%;
+        background-color: var(--color);
+        border-radius: 3px;
+    }
+    .sc_notification .sc_icon_text {
+        padding: 15px 0 15px 25px;
+        display: flex;
+        gap: var(--noteification_gap);
+        align-items: center;
+        color: var(--sc_color);
+    }
+    .sc_notification .sc_icon_text .sc_title {
+        color: var(--sc_title_color);
+        margin: 0;
+        margin-bottom: 4px;
+        text-transform: capitalize;
+    }
+    .sc_notification .sc_icon_text .sc_msg {
+        margin: 0;
+        color: var(--sc_color);
+    }
+    .sc_notification .sc_icon_text .sc_icon {
+        min-width: 25px;
+        height: 25px;
+        background-color: var(--color);
+        display: grid;
+        place-items: center;
+        border-radius: 50%;
+        color: #fff;
+    }
+    .sc_notification .sc_icon_text .sc_icon > svg {
+        pointer-events: none;
+    }
+    .sc_notification .sc_close {
+        width: 25px;
+        height: 25px;
+        display: grid;
+        place-content: center;
+        margin-right: 8px;
+        font-size: 14px;
+        cursor: pointer;
+        color: var(--sc_color);
+        transition: 0.3s ease-in-out;
+        transition-property: color;
+    }
+    .sc_notification .sc_close:hover {
+        color: var(--sc_danger);
+    }
+    .sc_notification .sc_close > svg {
+        pointer-events: none;
+    }
+
+    @keyframes sc_notification_open {
+        0% {
+            opacity: 0;
+            transform: translate(100%, 100px);
+        }
+        100% {
+            opacity: 1;
+            transform: translate(0, 0);
+        }
+        }
+        @keyframes sc_notification_close {
+        0% {
+            opacity: 1;
+            transform: translate(0, 0);
+        }
+        80% {
+            opacity: 0;
+            transform: translate(100%, 100px);
+        }
+        100% {
+            height: 0px;
+            margin-bottom: 0px;
+            overflow-y: hidden;
+        }
+    }
+    @keyframes sc_notification_timeDown {
+        100% {
+            width: 0%;
+        }
+    }
+/* notification message style end */
+
+
+
+/* alert, confirm and prompt style start */
+    .sc_confirmation_wraper {
+        position: fixed;
+        display: grid;
+        place-items: center;
+        top: 0;
+        left: 0;
+        height: 100%;
+        width: 100%;
+        padding: 15px;
+        background-color: #00000046;
+        z-index: 999999;
+        animation: sc_modal_wrapperOpen 0.3s ease-in;
+        transition: 0.3s ease-in-out;
+    }
+    .sc_confirmation_wraper.remove {
+        opacity: 0;
+    }
+
+    .sc_confirmation {
+        --animation_time: 0.3s;
+        --color: var(--sc_default_color);
+        --sc_gap: 15px;
+        --delay: 1s;
+        justify-content: space-between;
+        box-shadow: 0 1px 5px #0001, 0 1px 15px #0003;
+        gap: var(--sc_gap);
+        width: fit-content;
+        position: relative;
+        border-radius: 5px;
+        font-family: var(--font);
+        animation: sc_confirm_modal_open var(--animation_time) cubic-bezier(0.71, 1.07, 0.69, 1.18);
+        animation-delay: var(--animation_time);
+        animation-fill-mode: both;
+        background-color: #fff;
+        position: relative;
+        max-width: 400px;
+        width: 100%;
+        padding: 50px 25px 25px;
+    }
+    .sc_confirmation.sc_close_animation {
+        animation: sc_confirm_modal_close var(--animation_time) cubic-bezier(0.71, 1.07, 0.69, 1.18);
+        animation-fill-mode: both;
+    }
+    .sc_confirmation.sc_primary {
+        --color: var(--sc_primary);
+    }
+    .sc_confirmation.sc_secondary {
+        --color: var(--sc_secondary);
+    }
+    .sc_confirmation.sc_success {
+        --color: var(--sc_success);
+    }
+    .sc_confirmation.sc_warning {
+        --color: var(--sc_warning);
+    }
+    .sc_confirmation.sc_danger {
+        --color: var(--sc_danger);
+    }
+    .sc_confirmation::before {
+        content: "";
+        position: absolute;
+        left: 50%;
+        top: 0;
+        transform: translateX(-50%);
+        height: 3px;
+        background-color: var(--color);
+        border-radius: 3px;
+        width: 0%;
+        background-color: var(--color);
+        opacity: 0.4;
+        animation: _sc_confirm_modal_timeUp calc(var(--animation_time) * 3) ease-out;
+        animation-fill-mode: both;
+    }
+    .sc_confirmation .sc_icon {
+        min-width: 60px;
+        height: 60px;
+        background-color: var(--color);
+        display: grid;
+        place-items: center;
+        border-radius: 50%;
+        color: #fff;
+        position: absolute;
+        top: 0;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        border: 2px solid #fff;
+        box-shadow: 0 2px 10px var(--color), 0 2px 20px var(--color);
+    }
+    .sc_confirmation .sc_icon > svg {
+        pointer-events: none;
+    }
+    .sc_confirmation .sc_body {
+        gap: var(--sc_gap);
+        color: var(--sc_color);
+    }
+    .sc_confirmation .sc_body .sc_title {
+        color: var(--sc_title_color);
+        margin-top: 4px;
+        margin-bottom: 6px;
+        text-align: center;
+        text-transform: uppercase;
+        font-size: 1.1rem;
+    }
+    .sc_confirmation .sc_body .sc_msg {
+        color: var(--sc_color);
+        text-align: center;
+        text-transform: capitalize;
+    }
+    .sc_confirmation .sc_body .sc_input {
+        display: block;
+        width: 100%;
+        padding: 6px 15px;
+        font-size: 1rem;
+        font-family: inherit;
+        border: 1px solid var(--color);
+        border-radius: 0.2rem;
+        color: var(--sc_color);
+        outline: none;
+        margin-top: 5px;
+        margin-bottom: 10px;
+        transition: 0.3s ease-in-out;
+    }
+    .sc_confirmation .sc_body .sc_input:focus {
+        box-shadow: 0 1px 4px #0001 inset, 0 1px 14px #0001 inset;
+    }
+    .sc_confirmation .sc_footer {
+        display: flex;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 15px;
+    }
+    .sc_confirmation .sc_footer._flex_end {
+        justify-content: flex-end;
+    }
+    @media all and (max-width: 340px) {
+        .sc_confirmation .sc_footer {
+            flex-direction: column;
+            width: 100%;
+        }
+    }
+    .sc_confirmation .sc_footer > button {
+        padding: 10px 30px;
+        color: var(--sc_color);
+        font-size: 14px;
+        cursor: pointer;
+        border: none;
+        border-radius: 4px;
+        background-color: #fff;
+        box-shadow: 0 1px 4px #0002;
+        text-transform: uppercase;
+        border: 1px dashed #0005;
+        transition: 0.3s ease-in-out;
+        transition-property: box-shadow, border;
+    }
+    .sc_confirmation .sc_footer > button:hover {
+        box-shadow: 0 1px 5px #0002, 0 0 15px #0001, 0 0 25px #0001;
+    }
+    .sc_confirmation .sc_footer > button:active {
+        transform: scale(0.95);
+    }
+    .sc_confirmation .sc_footer .sc_confirm {
+        background-color: var(--color);
+        color: #fff;
+    }
+    .sc_confirmation .sc_footer .sc_confirm:hover {
+        border-color: #fff;
+    }
+
+    @keyframes sc_modal_wrapperOpen {
+        0% {
+            opacity: 0;
+        }
+        100% {
+            opacity: 1;
+        }
+        }
+        @keyframes sc_confirm_modal_open {
+        0% {
+            opacity: 0;
+            transform: scale(0);
+        }
+        100% {
+            opacity: 1;
+            transform: scale(1);
+        }
+    }
+    @keyframes sc_confirm_modal_close {
+        0% {
+            opacity: 1;
+            transform: scale(1);
+        }
+        100% {
+            opacity: 0;
+            transform: scale(0);
+        }
+    }
+    @keyframes _sc_confirm_modal_timeUp {
+        0% {
+            opacity: 1;
+        }
+        100% {
+            opacity: 1;
+            width: 100%;
+        }
+    }
+/* alert, confirm and prompt style end */

@@ -1,0 +1,13 @@
+:root{
+    --font: 'Poppins', sans-serif;
+}
+
+*, *:is(::before, ::after){
+    box-sizing: border-box;
+}
+
+
+body{
+    font-family: var(--font);
+    font-weight: 300;
+}
