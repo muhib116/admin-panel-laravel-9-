@@ -5,11 +5,12 @@
     
     <body class="font-sans antialiased">
         
-        <x-g.nav />
-        
         <x-g.aside />
-
-        <x-g.content>{{ $slot }}</x-g.content>
+        <section class="right_side">
+            <x-g.nav />
+            <x-g.content>{{ $slot }}</x-g.content>
+        </section>
+        
 
 
 
