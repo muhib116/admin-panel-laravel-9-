@@ -18,6 +18,8 @@
     <link rel="stylesheet" href="{{ asset('backend/css/master.css') }}">
     <link rel="stylesheet" href="{{ asset('global/style.css') }}">
     
+    @yield('style')
+
     {{-- vue js cdn --}}
     <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
 

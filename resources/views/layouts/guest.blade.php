@@ -8,11 +8,10 @@
 
     <title>{{ config('app.name', 'Laravel') }}</title>
 
-    <!-- Fonts -->
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&display=swap">
+    {{-- fontawesome icon --}}
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css" integrity="sha512-SfTiTlX6kk+qitfevl/7LibUOeJWlt9rbyDn92a1DqWOw9vWG2MFoays0sgObmWazO5BQPiFucnnEAjpAB+/Sw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
 
-    <!-- Styles -->
-    <link rel="stylesheet" href="{{ asset('css/app.css') }}">
+    @yield('style')
 
     <!-- Scripts -->
     <script src="{{ asset('js/app.js') }}" defer></script>
@@ -22,6 +21,8 @@
     <div class="font-sans text-gray-900 antialiased">
         {{ $slot }}
     </div>
+
+    @yield('script')
 </body>
 
 </html>

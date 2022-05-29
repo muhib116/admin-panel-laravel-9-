@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 
-    <x-g.adminHead />
+    <x-g.AdminHead />
     
-    <body class="font-sans antialiased">
+    <body class="main_container close_left_side">
         
         <x-g.aside />
         <section class="right_side">
