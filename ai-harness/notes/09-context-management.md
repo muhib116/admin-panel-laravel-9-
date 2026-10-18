@@ -91,6 +91,32 @@ models follow long system prompts poorly. A harness can make instructions *avail
 whether they are *followed* depends on the model. That is why the final demo uses a
 bigger model.
 
+## A real compaction run, and its cost
+
+With `OLLAMA_NUM_CTX=4096`, asking the 3B model to read `composer.json`, then
+`config/app.php`, then `config/database.php` in the Laravel project:
+
+```
+>   > Reading composer.json
+>   > Reading config/app.php
+  [context compacted: ~3073 -> ~2574 tokens, 3 messages summarized]
+>   > Reading config/database.php
+  [context compacted: ~3569 -> ~2590 tokens, 5 messages summarized]
+> /context
+context: ~3125 / 4096 tokens (76.3%), 6 messages
+> Which three files did you read?
+  [context compacted: ~3146 -> ~2159 tokens, 5 messages summarized]
+You have read: 1. config/database.php  2. config/redis.php  3. ...
+```
+
+The mechanics worked: three compactions, and the conversation never broke. But
+after a summary of a summary of a summary (written by a small model), the agent
+**forgot** `composer.json` and `config/app.php`, and named a file it never read.
+Compaction is lossy, and errors compound. Defenses real harnesses use: a bigger
+window, a strong model for summaries, keeping the original request verbatim,
+putting durable facts in memory files, and **sub-agents** that keep big outputs out
+of the main context in the first place (Lesson 10).
+
 ## Exercise
 
 1. Set `OLLAMA_NUM_CTX=4096`, then read a few big files. Watch `/context`, and see the
