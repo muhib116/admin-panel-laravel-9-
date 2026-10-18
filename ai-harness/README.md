@@ -1,16 +1,21 @@
 # mini-claude
 
 A small AI coding agent for the terminal, built from scratch to learn how harnesses
-like Claude Code work behind the scenes. The code is under 2,000 lines of TypeScript,
-with no AI SDKs and only one runtime dependency (`tsx`).
+like Claude Code work behind the scenes. The code is about 2,100 lines of TypeScript,
+with no AI SDKs. The only runtime dependencies are `tsx` (runs TypeScript directly) and
+`undici` (HTTP without idle timeouts, see Lesson 10).
+
+A real run (local `qwen2.5:7b`, fixing leftover merge-conflict markers in a Laravel README):
 
 ```
-> The README has leftover git merge conflict markers. Fix them.
-  > Reading README.md
+  > Reading README.md from line 66
+    66|======= (+2 lines)
+Allow edit_file README.md
+  - >>>>>>> 807910ee5a1f72d41aa4b739b42014b7ba556466\n
+  +
+?  [y = yes, n = no, a = always allow edit_file, or n: <tell the agent what to do instead>] y
   > Editing README.md
-Allow edit_file README.md ...? [y = yes, n = no, a = always allow edit_file, ...] y
-Removed the conflict markers and kept the project title at the top.
-[turns=3 | total tokens in=9120 out=310]
+    Edited README.md (1 replacement)
 ```
 
 ## The one idea
@@ -53,7 +58,7 @@ Choose a model in `.env`:
 npm start                                    # chat in the current directory
 npm start -- --cwd ../ "explain routes/web.php"   # one-shot, in another project
 npm start -- --resume                        # continue the last session
-npm test                                     # 60 tests, fake LLM, no API key needed
+npm test                                     # 64 tests, fake LLM, no API key needed
 npm run eval -- --runs 3                     # real tasks against a real model, pass rate
 npm link && mini-claude                      # install as a command
 ```
