@@ -1,3 +1,4 @@
 node_modules/
 .env
 .mini-claude/
+evals/results/

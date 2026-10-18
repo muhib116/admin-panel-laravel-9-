@@ -1,16 +1,22 @@
+import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { Agent } from "./agent/loop.js";
+import { createTaskTool } from "./agent/subagent.js";
 import { formatMemory, loadMemory, rememberLine } from "./context/memory.js";
 import { buildSystemPrompt, detectEnvironment } from "./context/systemPrompt.js";
 import { createProvider } from "./llm/index.js";
 import { parseAnswer, PermissionManager, type PermissionMode, type Prompter } from "./permissions.js";
+import { Session } from "./session.js";
 import { createCoreRegistry } from "./tools/index.js";
+import { ToolRegistry } from "./tools/registry.js";
+import type { Message } from "./types.js";
 import { LineReader } from "./ui/input.js";
 import { createRenderer, makeStyler } from "./ui/render.js";
 
+// Load the harness's own .env, not the one of the project being worked on.
 try {
-  process.loadEnvFile(".env");
+  process.loadEnvFile(fileURLToPath(new URL("../.env", import.meta.url)));
 } catch {}
 
 const { values: args, positionals } = parseArgs({
@@ -22,6 +28,9 @@ const { values: args, positionals } = parseArgs({
     yes: { type: "boolean", short: "y" },
     stream: { type: "boolean", default: true },
     "no-stream": { type: "boolean" },
+    resume: { type: "boolean", short: "r" },
+    session: { type: "string" },
+    "no-subagents": { type: "boolean" },
   },
 });
 if (args["no-stream"]) args.stream = false;
@@ -36,9 +45,13 @@ if (!MODES.includes(mode)) {
 const cwd = resolve(args.cwd ?? process.cwd());
 const provider = createProvider();
 const tools = createCoreRegistry();
-const toolNames = tools.schemas().map((t) => t.name);
 let memoryFiles = await loadMemory(cwd);
-const system = () => buildSystemPrompt({ env: detectEnvironment(cwd), toolNames, memory: formatMemory(memoryFiles) });
+const system = () =>
+  buildSystemPrompt({
+    env: detectEnvironment(cwd),
+    toolNames: tools.schemas().map((t) => t.name),
+    memory: formatMemory(memoryFiles),
+  });
 
 const paint = makeStyler(Boolean(process.stdout.isTTY));
 const reader = new LineReader();
@@ -51,6 +64,37 @@ const prompter: Prompter = {
 };
 const permissions = new PermissionManager(mode, prompter, (name) => tools.get(name)?.kind);
 
+if (!args["no-subagents"]) {
+  // Built from the core tools before `task` is registered, so sub-agents cannot spawn sub-agents.
+  const subTools = new ToolRegistry(createCoreRegistry().schemas().map((s) => tools.get(s.name)!));
+  tools.register(
+    createTaskTool({
+      provider,
+      tools: subTools,
+      system,
+      permissions,
+      onEvent: createRenderer({ tools: subTools, indent: "    | ", toolsOnly: true }),
+    }),
+  );
+}
+
+let session: Session;
+let restored: Message[] = [];
+if (args.resume || args.session) {
+  const all = await Session.list(cwd);
+  const found = args.session ? all.find((s) => s.id === args.session || s.path === args.session) : all[0];
+  if (!found) {
+    console.error(args.session ? `No session ${args.session} for ${cwd}` : `No previous session for ${cwd}`);
+    process.exit(1);
+  }
+  ({ session, messages: restored } = await Session.open(found.path));
+} else {
+  session = await Session.create(cwd, { provider: provider.name, model: provider.model });
+}
+
+// Writes happen in order, one at a time, even though events fire synchronously.
+let saving = Promise.resolve();
+const render = createRenderer({ tools });
 const agent = new Agent({
   provider,
   tools,
@@ -59,8 +103,16 @@ const agent = new Agent({
   stream: args.stream,
   maxTurns: args["max-turns"] ? Number(args["max-turns"]) : undefined,
   system,
-  onEvent: createRenderer({ tools }),
+  onEvent(event) {
+    if (event.type === "history") {
+      const snapshot = structuredClone(event.messages);
+      saving = saving.then(() => session.sync(snapshot)).catch((err) => console.error(`session save failed: ${err.message}`));
+      return;
+    }
+    render(event);
+  },
 });
+agent.messages = restored;
 
 // Ctrl+C while working interrupts the agent; Ctrl+C twice while idle exits.
 let lastIdleSigint = 0;
@@ -97,6 +149,7 @@ async function handle(input: string) {
 if (positionals.length) {
   await handle(positionals.join(" "));
   reader.close();
+  await saving;
   process.exit(0);
 }
 
@@ -107,6 +160,7 @@ const HELP = `Commands:
   /context               show how full the context window is
   /compact               summarize older messages now
   /memory                show loaded AGENT.md files
+  /sessions              list saved sessions for this project
   /mode <ask|auto|read-only>   change the permission mode
   # <text>               remember <text> in ./AGENT.md
   /exit                  quit`;
@@ -153,6 +207,16 @@ async function command(line: string): Promise<boolean> {
       console.log(`permission mode: ${permissions.mode}; always-rules: ${[...permissions.rules].join(", ") || "none"}\n`);
       break;
     }
+    case "/sessions": {
+      const all = await Session.list(cwd);
+      console.log(
+        all
+          .slice(0, 10)
+          .map((s) => `${s.id === session.id ? "*" : " "} ${s.id}  (${s.modified.toLocaleString()})`)
+          .join("\n") + "\n  resume with: --resume (latest) or --session <id>\n",
+      );
+      break;
+    }
     default:
       console.log(`Unknown command ${name}. Type /help.\n`);
   }
@@ -160,6 +224,7 @@ async function command(line: string): Promise<boolean> {
 }
 
 console.log(`mini-claude using ${provider.name}:${provider.model} in ${cwd} (permission mode: ${mode})`);
+console.log(paint("dim", `session ${session.id}${restored.length ? ` (resumed, ${restored.length} messages)` : ""}`));
 if (memoryFiles.length) console.log(paint("dim", `loaded memory: ${memoryFiles.map((f) => f.path).join(", ")}`));
 console.log(paint("dim", "Type /help for commands.\n"));
 
@@ -182,3 +247,5 @@ while (true) {
 }
 
 reader.close();
+await saving;
+process.exit(0);

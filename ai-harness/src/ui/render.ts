@@ -13,9 +13,18 @@ export function makeStyler(enabled: boolean) {
  * Turns agent events into terminal output. Streaming text is written as it
  * arrives; tool calls are shown as one-line activity summaries.
  */
-export function createRenderer(opts: { tools: ToolRegistry; out?: NodeJS.WritableStream; color?: boolean }) {
+export function createRenderer(opts: {
+  tools: ToolRegistry;
+  out?: NodeJS.WritableStream;
+  color?: boolean;
+  /** Prefix for every line, used to nest sub-agent activity under its task. */
+  indent?: string;
+  /** Show only tool activity (sub-agents' text is not shown; only their final report reaches the parent). */
+  toolsOnly?: boolean;
+}) {
   const out = opts.out ?? process.stdout;
   const paint = makeStyler(opts.color ?? Boolean((out as NodeJS.WriteStream).isTTY));
+  const indent = opts.indent ?? "";
   let midLine = false;
   let streamedThisTurn = false;
 
@@ -23,9 +32,10 @@ export function createRenderer(opts: { tools: ToolRegistry; out?: NodeJS.Writabl
     out.write(s);
     if (s.length) midLine = !s.endsWith("\n");
   };
-  const line = (s: string) => write(`${midLine ? "\n" : ""}${s}\n`);
+  const line = (s: string) => write(`${midLine ? "\n" : ""}${indent}${s}\n`);
 
   return function render(event: AgentEvent) {
+    if (opts.toolsOnly && !["tool_start", "tool_end", "tool_denied", "warning"].includes(event.type)) return;
     switch (event.type) {
       case "text_delta":
         if (!streamedThisTurn) write(midLine ? "\n\n" : "\n");

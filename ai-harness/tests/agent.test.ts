@@ -87,6 +87,15 @@ describe("Agent loop", () => {
     expect(llm.requests[2].messages.at(-1)!.content).toMatchObject([{ content: expect.stringContaining("helo") }]);
   });
 
+  it("replaces an empty model reply with a placeholder and warns", async () => {
+    const llm = new ScriptedProvider([[]]);
+    const { agent, events } = makeAgent(llm);
+    const res = await agent.run("write the file");
+    expect(res.text).toBe("(empty response)");
+    expect(agent.messages[1]).toEqual({ role: "assistant", content: [{ type: "text", text: "(empty response)" }] });
+    expect(events.some((e) => e.type === "warning")).toBe(true);
+  });
+
   it("stops at maxTurns and keeps roles alternating for the next request", async () => {
     const loop = () => [toolUse(`t${Math.random()}`, "list_files", {})];
     const llm = new ScriptedProvider([loop, loop, [text("next answer")]]);

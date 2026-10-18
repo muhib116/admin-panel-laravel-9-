@@ -21,7 +21,9 @@ export type AgentEvent =
   | { type: "tool_denied"; call: ToolUseBlock; reason: string }
   | { type: "usage"; usage: Usage }
   | { type: "compacted"; beforeTokens: number; afterTokens: number; removedMessages: number }
-  | { type: "warning"; message: string };
+  | { type: "warning"; message: string }
+  /** The message history changed (used to persist sessions). */
+  | { type: "history"; messages: Message[] };
 
 export type StopCause = "done" | "max_turns" | "max_tokens" | "interrupted";
 
@@ -78,6 +80,7 @@ export class Agent {
     if (!result) return false;
     this.messages = result.messages;
     this.calibration = null;
+    this.historyChanged();
     this.emit({ type: "compacted", beforeTokens: before, afterTokens: this.contextTokens(), removedMessages: result.removed });
     return true;
   }
@@ -117,6 +120,11 @@ export class Agent {
     } else {
       this.messages.push({ role: "user", content: blocks });
     }
+    this.historyChanged();
+  }
+
+  private historyChanged() {
+    this.emit({ type: "history", messages: this.messages });
   }
 
   /** The agent loop: call the model, run requested tools, feed results back, repeat. */
@@ -149,8 +157,15 @@ export class Agent {
         // Keep what the user already saw, so the model knows where it was cut off.
         if (streamed) {
           this.messages.push({ role: "assistant", content: [{ type: "text", text: `${streamed}\n[interrupted by user]` }] });
+          this.historyChanged();
         }
         return { text: streamed, turns: turn, stoppedBecause: "interrupted" };
+      }
+
+      if (res.content.length === 0) {
+        // APIs reject empty assistant messages, and the user would see nothing at all.
+        this.emit({ type: "warning", message: `The model returned an empty response (${res.usage.outputTokens} output tokens, nothing usable).` });
+        res.content = [{ type: "text", text: "(empty response)" }];
       }
 
       this.totalUsage.inputTokens += res.usage.inputTokens;
@@ -158,6 +173,7 @@ export class Agent {
       this.emit({ type: "usage", usage: res.usage });
 
       this.messages.push({ role: "assistant", content: res.content });
+      this.historyChanged();
       this.emit({ type: "assistant", content: res.content });
 
       const calls = toolUsesOf(res.content);
