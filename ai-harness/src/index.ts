@@ -1,6 +1,7 @@
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { Agent } from "./agent/loop.js";
+import { buildSystemPrompt, detectEnvironment } from "./context/systemPrompt.js";
 import { createProvider } from "./llm/index.js";
 import { createCoreRegistry } from "./tools/index.js";
 import { textOf } from "./types.js";
@@ -20,13 +21,16 @@ const { values: args, positionals } = parseArgs({
 
 const cwd = resolve(args.cwd ?? process.cwd());
 const provider = createProvider();
+const tools = createCoreRegistry();
+const toolNames = tools.schemas().map((t) => t.name);
+const system = () => buildSystemPrompt({ env: detectEnvironment(cwd), toolNames });
 
 const agent = new Agent({
   provider,
-  tools: createCoreRegistry(),
+  tools,
   cwd,
   maxTurns: args["max-turns"] ? Number(args["max-turns"]) : undefined,
-  system: `You are mini-claude, a coding agent running in a terminal. The project root is ${cwd}. Use your tools to inspect and change the project, then answer briefly.`,
+  system,
   onEvent(event) {
     if (event.type === "assistant") {
       const text = textOf(event.content).trim();
@@ -59,7 +63,7 @@ if (positionals.length) {
 
 const reader = new LineReader();
 console.log(`mini-claude using ${provider.name}:${provider.model} in ${cwd}`);
-console.log("(/exit to quit, /history to inspect the conversation)\n");
+console.log("(/exit to quit, /history to inspect the conversation, /system to see the system prompt)\n");
 
 while (true) {
   const raw = await reader.read("> ");
@@ -69,6 +73,10 @@ while (true) {
   if (line === "/exit") break;
   if (line === "/history") {
     console.log(JSON.stringify(agent.messages, null, 2));
+    continue;
+  }
+  if (line === "/system") {
+    console.log(system());
     continue;
   }
   await handle(line);
