@@ -1,3 +1,5 @@
+import { compactMessages } from "../context/compaction.js";
+import { estimateMessages, estimateRequest, truncateMiddle } from "../context/tokens.js";
 import type { LLMProvider } from "../llm/provider.js";
 import type { ToolRegistry } from "../tools/registry.js";
 import {
@@ -17,7 +19,9 @@ export type AgentEvent =
   | { type: "tool_start"; call: ToolUseBlock }
   | { type: "tool_end"; call: ToolUseBlock; result: ToolResultBlock }
   | { type: "tool_denied"; call: ToolUseBlock; reason: string }
-  | { type: "usage"; usage: Usage };
+  | { type: "usage"; usage: Usage }
+  | { type: "compacted"; beforeTokens: number; afterTokens: number; removedMessages: number }
+  | { type: "warning"; message: string };
 
 export type StopCause = "done" | "max_turns" | "max_tokens" | "interrupted";
 
@@ -39,14 +43,59 @@ export interface AgentOptions {
   stream?: boolean;
   /** Gatekeeper consulted before every tool call. Omit to allow everything. */
   permissions?: { check(call: ToolUseBlock): Promise<{ allowed: true } | { allowed: false; reason: string }> };
+  /** Compact when the context is this full (fraction of the window). Default 0.75. */
+  compactAt?: number;
+  /** Tool output beyond this many characters is truncated in the middle. */
+  maxToolResultChars?: number;
   onEvent?: (event: AgentEvent) => void;
 }
 
 export class Agent {
   messages: Message[] = [];
   readonly totalUsage: Usage = { inputTokens: 0, outputTokens: 0 };
+  /** Real input token count reported for the last call, and how many messages it covered. */
+  private calibration: { tokens: number; messageCount: number } | null = null;
 
   constructor(readonly opts: AgentOptions) {}
+
+  get contextWindow() {
+    return this.opts.provider.contextWindow;
+  }
+
+  /** How full the context is: the last real count from the API plus an estimate for anything newer. */
+  contextTokens(): number {
+    const estimate = estimateRequest(this.system, this.messages, this.opts.tools.schemas());
+    const cal = this.calibration;
+    if (!cal || cal.messageCount > this.messages.length) return estimate;
+    return Math.max(estimate, cal.tokens + estimateMessages(this.messages.slice(cal.messageCount)));
+  }
+
+  /** Replace older history with a model-written summary. Returns false if there was nothing to compact. */
+  async compact(signal?: AbortSignal): Promise<boolean> {
+    const before = this.contextTokens();
+    const keepTokens = Math.floor(this.contextWindow * 0.3);
+    const result = await compactMessages(this.opts.provider, this.messages, keepTokens, signal);
+    if (!result) return false;
+    this.messages = result.messages;
+    this.calibration = null;
+    this.emit({ type: "compacted", beforeTokens: before, afterTokens: this.contextTokens(), removedMessages: result.removed });
+    return true;
+  }
+
+  private async maybeCompact(signal?: AbortSignal) {
+    if (this.contextTokens() < this.contextWindow * (this.opts.compactAt ?? 0.75)) return;
+    try {
+      await this.compact(signal);
+    } catch (err) {
+      if (signal?.aborted) throw err;
+      this.emit({ type: "warning", message: `Compaction failed: ${(err as Error).message}` });
+    }
+  }
+
+  private get maxToolResultChars() {
+    // About 15% of the window per tool result, capped at 30k characters.
+    return this.opts.maxToolResultChars ?? Math.min(30_000, Math.floor(this.contextWindow * 4 * 0.15));
+  }
 
   private emit(event: AgentEvent) {
     this.opts.onEvent?.(event);
@@ -79,6 +128,8 @@ export class Agent {
       let streamed = "";
       let res;
       try {
+        await this.maybeCompact(signal);
+        const messageCount = this.messages.length;
         res = await this.opts.provider.chat({
           system: this.system,
           messages: this.messages,
@@ -92,6 +143,7 @@ export class Agent {
               }
             : undefined,
         });
+        if (res.usage.inputTokens > 0) this.calibration = { tokens: res.usage.inputTokens, messageCount };
       } catch (err) {
         if (!signal?.aborted) throw err;
         // Keep what the user already saw, so the model knows where it was cut off.
@@ -134,6 +186,7 @@ export class Agent {
         }
         this.emit({ type: "tool_start", call });
         const result = await this.opts.tools.run(call, { cwd: this.opts.cwd, signal });
+        result.content = truncateMiddle(result.content, this.maxToolResultChars);
         this.emit({ type: "tool_end", call, result });
         results.push(result);
       }

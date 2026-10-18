@@ -58,6 +58,17 @@ export function createRenderer(opts: { tools: ToolRegistry; out?: NodeJS.Writabl
       case "tool_denied":
         line(paint("yellow", `    denied: ${event.reason}`));
         break;
+      case "compacted":
+        line(
+          paint(
+            "dim",
+            `  [context compacted: ~${event.beforeTokens} -> ~${event.afterTokens} tokens, ${event.removedMessages} messages summarized]`,
+          ),
+        );
+        break;
+      case "warning":
+        line(paint("yellow", `  warning: ${event.message}`));
+        break;
     }
   };
 }

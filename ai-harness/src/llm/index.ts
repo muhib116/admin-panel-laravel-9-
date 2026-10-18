@@ -14,7 +14,11 @@ export function createProvider(env: NodeJS.ProcessEnv = process.env): LLMProvide
       return new AnthropicProvider(env.ANTHROPIC_API_KEY, env.ANTHROPIC_MODEL ?? DEFAULT_ANTHROPIC_MODEL);
     }
     case "ollama":
-      return new OllamaProvider(env.OLLAMA_MODEL ?? DEFAULT_OLLAMA_MODEL, env.OLLAMA_HOST ?? "http://localhost:11434");
+      return new OllamaProvider(
+        env.OLLAMA_MODEL ?? DEFAULT_OLLAMA_MODEL,
+        env.OLLAMA_HOST ?? "http://localhost:11434",
+        env.OLLAMA_NUM_CTX ? Number(env.OLLAMA_NUM_CTX) : undefined,
+      );
     default:
       throw new Error(`Unknown MINI_CLAUDE_PROVIDER "${name}" (use anthropic or ollama)`);
   }

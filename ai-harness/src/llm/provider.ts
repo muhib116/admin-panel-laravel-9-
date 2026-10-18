@@ -23,5 +23,7 @@ export interface ChatResponse {
 export interface LLMProvider {
   readonly name: string;
   readonly model: string;
+  /** Max tokens (input + output) the model can see at once. */
+  readonly contextWindow: number;
   chat(req: ChatRequest): Promise<ChatResponse>;
 }

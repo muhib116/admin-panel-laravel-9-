@@ -111,6 +111,8 @@ export class OllamaProvider implements LLMProvider {
   constructor(
     readonly model: string = DEFAULT_OLLAMA_MODEL,
     protected host = "http://localhost:11434",
+    /** Ollama silently drops the oldest tokens beyond num_ctx, so we always set it explicitly. */
+    readonly contextWindow = 16_384,
   ) {}
 
   protected buildBody(req: ChatRequest, stream: boolean) {
@@ -119,7 +121,7 @@ export class OllamaProvider implements LLMProvider {
       messages: toOllamaMessages(req.system, req.messages),
       tools: toOllamaTools(req.tools),
       stream,
-      options: { num_predict: req.maxTokens ?? 4096 },
+      options: { num_predict: req.maxTokens ?? 4096, num_ctx: this.contextWindow },
     };
   }
 

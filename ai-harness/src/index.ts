@@ -1,6 +1,7 @@
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { Agent } from "./agent/loop.js";
+import { formatMemory, loadMemory, rememberLine } from "./context/memory.js";
 import { buildSystemPrompt, detectEnvironment } from "./context/systemPrompt.js";
 import { createProvider } from "./llm/index.js";
 import { parseAnswer, PermissionManager, type PermissionMode, type Prompter } from "./permissions.js";
@@ -36,7 +37,8 @@ const cwd = resolve(args.cwd ?? process.cwd());
 const provider = createProvider();
 const tools = createCoreRegistry();
 const toolNames = tools.schemas().map((t) => t.name);
-const system = () => buildSystemPrompt({ env: detectEnvironment(cwd), toolNames });
+let memoryFiles = await loadMemory(cwd);
+const system = () => buildSystemPrompt({ env: detectEnvironment(cwd), toolNames, memory: formatMemory(memoryFiles) });
 
 const paint = makeStyler(Boolean(process.stdout.isTTY));
 const reader = new LineReader();
@@ -98,27 +100,82 @@ if (positionals.length) {
   process.exit(0);
 }
 
+const HELP = `Commands:
+  /help                  show this help
+  /history               print the raw conversation sent to the model
+  /system                print the current system prompt
+  /context               show how full the context window is
+  /compact               summarize older messages now
+  /memory                show loaded AGENT.md files
+  /mode <ask|auto|read-only>   change the permission mode
+  # <text>               remember <text> in ./AGENT.md
+  /exit                  quit`;
+
+/** Returns false when the REPL should exit. */
+async function command(line: string): Promise<boolean> {
+  const [name, ...rest] = line.split(/\s+/);
+  switch (name) {
+    case "/exit":
+      return false;
+    case "/help":
+      console.log(HELP + "\n");
+      break;
+    case "/history":
+      console.log(JSON.stringify(agent.messages, null, 2));
+      break;
+    case "/system":
+      console.log(system());
+      break;
+    case "/context": {
+      const used = agent.contextTokens();
+      const pct = ((used / agent.contextWindow) * 100).toFixed(1);
+      console.log(`context: ~${used} / ${agent.contextWindow} tokens (${pct}%), ${agent.messages.length} messages\n`);
+      break;
+    }
+    case "/compact": {
+      running = new AbortController();
+      try {
+        if (!(await agent.compact(running.signal))) console.log("Nothing to compact yet.\n");
+      } catch (err) {
+        console.error(paint("red", `Error: ${(err as Error).message}\n`));
+      } finally {
+        running = null;
+      }
+      break;
+    }
+    case "/memory":
+      memoryFiles = await loadMemory(cwd);
+      console.log(memoryFiles.length ? memoryFiles.map((f) => `${f.scope}: ${f.path}`).join("\n") + "\n" : "No AGENT.md files found.\n");
+      break;
+    case "/mode": {
+      const next = rest[0] as PermissionMode;
+      if (MODES.includes(next)) permissions.mode = next;
+      console.log(`permission mode: ${permissions.mode}; always-rules: ${[...permissions.rules].join(", ") || "none"}\n`);
+      break;
+    }
+    default:
+      console.log(`Unknown command ${name}. Type /help.\n`);
+  }
+  return true;
+}
+
 console.log(`mini-claude using ${provider.name}:${provider.model} in ${cwd} (permission mode: ${mode})`);
-console.log("(/exit, /history, /system, /mode <ask|auto|read-only>)\n");
+if (memoryFiles.length) console.log(paint("dim", `loaded memory: ${memoryFiles.map((f) => f.path).join(", ")}`));
+console.log(paint("dim", "Type /help for commands.\n"));
 
 while (true) {
   const raw = await reader.read("> ");
   if (raw === null) break;
   const line = raw.trim();
   if (!line) continue;
-  if (line === "/exit") break;
-  if (line === "/history") {
-    console.log(JSON.stringify(agent.messages, null, 2));
+  if (line.startsWith("/")) {
+    if (!(await command(line))) break;
     continue;
   }
-  if (line === "/system") {
-    console.log(system());
-    continue;
-  }
-  if (line.startsWith("/mode")) {
-    const next = line.split(/\s+/)[1] as PermissionMode;
-    if (MODES.includes(next)) permissions.mode = next;
-    console.log(`permission mode: ${permissions.mode}; always-rules: ${[...permissions.rules].join(", ") || "none"}\n`);
+  if (line.startsWith("#")) {
+    const path = await rememberLine(cwd, line.replace(/^#+\s*/, ""));
+    memoryFiles = await loadMemory(cwd);
+    console.log(paint("dim", `Saved to ${path}\n`));
     continue;
   }
   await handle(line);

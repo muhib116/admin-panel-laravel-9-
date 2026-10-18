@@ -22,6 +22,7 @@ export function mapAnthropicStopReason(reason: string | null | undefined): StopR
  */
 export class AnthropicProvider implements LLMProvider {
   readonly name = "anthropic";
+  readonly contextWindow = 200_000;
 
   constructor(
     private apiKey: string,
