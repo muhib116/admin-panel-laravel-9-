@@ -1,0 +1,25 @@
+{
+  "name": "mini-claude",
+  "version": "0.1.0",
+  "description": "A tiny AI coding-agent harness built from scratch to learn how tools like Claude Code work.",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "mini-claude": "./bin/mini-claude.js"
+  },
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "lesson:1": "tsx examples/01-raw-call.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "engines": {
+    "node": ">=20.12"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  }
+}
