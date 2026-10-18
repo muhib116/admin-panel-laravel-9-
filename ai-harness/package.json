@@ -11,15 +11,19 @@
     "start": "tsx src/index.ts",
     "lesson:1": "tsx examples/01-raw-call.ts",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "eval": "tsx evals/run.ts"
   },
   "engines": {
     "node": ">=20.12"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
-    "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "^5.0.5"
+  },
+  "dependencies": {
+    "tsx": "^4.23.15",
+    "undici": "^7.30.1"
   }
 }

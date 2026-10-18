@@ -1,5 +1,6 @@
 import type { ContentBlock, Message, StopReason, ToolSchema } from "../types.js";
 import type { ChatRequest, ChatResponse, LLMProvider } from "./provider.js";
+import { llmFetch, withCause } from "./http.js";
 import { readLines } from "./stream.js";
 
 export const DEFAULT_OLLAMA_MODEL = "qwen2.5-coder:7b";
@@ -126,7 +127,7 @@ export class OllamaProvider implements LLMProvider {
   }
 
   protected async post(body: unknown, signal?: AbortSignal): Promise<Response> {
-    const res = await fetch(`${this.host}/api/chat`, {
+    const res = await llmFetch(`${this.host}/api/chat`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
@@ -137,13 +138,17 @@ export class OllamaProvider implements LLMProvider {
   }
 
   async chat(req: ChatRequest): Promise<ChatResponse> {
-    if (req.onText) {
-      const res = await this.post(this.buildBody(req, true), req.signal);
-      return accumulateOllamaStream(readLines(res.body!), req.onText);
+    try {
+      if (req.onText) {
+        const res = await this.post(this.buildBody(req, true), req.signal);
+        return await accumulateOllamaStream(readLines(res.body!), req.onText);
+      }
+      const res = await this.post(this.buildBody(req, false), req.signal);
+      const json = (await res.json()) as OllamaChatResponse;
+      return toChatResponse(fromOllamaMessage(json.message), json);
+    } catch (err) {
+      throw withCause(err);
     }
-    const res = await this.post(this.buildBody(req, false), req.signal);
-    const json = (await res.json()) as OllamaChatResponse;
-    return toChatResponse(fromOllamaMessage(json.message), json);
   }
 }
 

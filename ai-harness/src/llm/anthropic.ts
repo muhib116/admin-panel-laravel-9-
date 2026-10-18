@@ -1,5 +1,6 @@
 import type { ContentBlock, StopReason } from "../types.js";
 import type { ChatRequest, ChatResponse, LLMProvider } from "./provider.js";
+import { llmFetch, withCause } from "./http.js";
 import { parseSSE, readLines, type SSEEvent } from "./stream.js";
 
 const API_URL = "https://api.anthropic.com/v1/messages";
@@ -40,7 +41,7 @@ export class AnthropicProvider implements LLMProvider {
   }
 
   protected async post(body: unknown, signal?: AbortSignal): Promise<Response> {
-    const res = await fetch(API_URL, {
+    const res = await llmFetch(API_URL, {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -55,17 +56,21 @@ export class AnthropicProvider implements LLMProvider {
   }
 
   async chat(req: ChatRequest): Promise<ChatResponse> {
-    if (req.onText) {
-      const res = await this.post({ ...this.buildBody(req), stream: true }, req.signal);
-      return accumulateAnthropicStream(parseSSE(readLines(res.body!)), req.onText);
+    try {
+      if (req.onText) {
+        const res = await this.post({ ...this.buildBody(req), stream: true }, req.signal);
+        return await accumulateAnthropicStream(parseSSE(readLines(res.body!)), req.onText);
+      }
+      const res = await this.post(this.buildBody(req), req.signal);
+      const json = (await res.json()) as AnthropicResponse;
+      return {
+        content: json.content,
+        stopReason: mapAnthropicStopReason(json.stop_reason),
+        usage: { inputTokens: json.usage.input_tokens, outputTokens: json.usage.output_tokens },
+      };
+    } catch (err) {
+      throw withCause(err);
     }
-    const res = await this.post(this.buildBody(req), req.signal);
-    const json = (await res.json()) as AnthropicResponse;
-    return {
-      content: json.content,
-      stopReason: mapAnthropicStopReason(json.stop_reason),
-      usage: { inputTokens: json.usage.input_tokens, outputTokens: json.usage.output_tokens },
-    };
   }
 }
 
