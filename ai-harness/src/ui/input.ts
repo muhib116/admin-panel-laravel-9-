@@ -39,6 +39,13 @@ export class LineReader {
     return new Promise((resolve) => (this.waiting = resolve));
   }
 
+  /** Make a pending read() resolve with null (used when the user hits Ctrl+C mid-prompt). */
+  cancel() {
+    const resolve = this.waiting;
+    this.waiting = null;
+    resolve?.(null);
+  }
+
   close() {
     this.rl.close();
   }

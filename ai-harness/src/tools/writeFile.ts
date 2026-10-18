@@ -16,6 +16,7 @@ export const writeFileTool: Tool<{ path: string; content: string }> = {
     },
     required: ["path", "content"],
   },
+  activity: ({ path }) => `Writing ${path}`,
   async run({ path, content }, ctx) {
     const abs = resolveInProject(ctx.cwd, path);
     await mkdir(dirname(abs), { recursive: true });

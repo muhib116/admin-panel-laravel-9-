@@ -20,6 +20,7 @@ export const bashTool: Tool<{ command: string; timeout_ms?: number }> = {
     },
     required: ["command"],
   },
+  activity: ({ command }) => `Running: ${command}`,
   run({ command, timeout_ms }, ctx) {
     const timeout = Math.min(timeout_ms ?? DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS);
     return new Promise((resolve) => {

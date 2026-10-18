@@ -18,6 +18,7 @@ export const listFilesTool: Tool<{ path?: string; pattern?: string }> = {
       pattern: { type: "string", description: "Glob filter, e.g. `*.ts` or `src/**/*.test.ts`." },
     },
   },
+  activity: ({ path, pattern }) => `Listing ${path ?? "."}${pattern ? ` matching ${pattern}` : ""}`,
   async run({ path = ".", pattern }, ctx) {
     const root = resolve(ctx.cwd);
     const matcher = pattern ? globToRegExp(pattern) : null;

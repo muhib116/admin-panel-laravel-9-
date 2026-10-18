@@ -17,6 +17,8 @@ export interface Tool<I = Record<string, unknown>> {
   description: string;
   inputSchema: ToolSchema["input_schema"];
   run(input: I, ctx: ToolContext): Promise<string>;
+  /** Short human-readable line for the UI, e.g. "Reading src/app.ts". */
+  activity?(input: I): string;
 }
 
 /** Thrown by tools for expected failures; the message is shown to the model as-is. */

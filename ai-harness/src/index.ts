@@ -5,8 +5,8 @@ import { buildSystemPrompt, detectEnvironment } from "./context/systemPrompt.js"
 import { createProvider } from "./llm/index.js";
 import { parseAnswer, PermissionManager, type PermissionMode, type Prompter } from "./permissions.js";
 import { createCoreRegistry } from "./tools/index.js";
-import { textOf } from "./types.js";
 import { LineReader } from "./ui/input.js";
+import { createRenderer, makeStyler } from "./ui/render.js";
 
 try {
   process.loadEnvFile(".env");
@@ -19,8 +19,11 @@ const { values: args, positionals } = parseArgs({
     "max-turns": { type: "string" },
     mode: { type: "string", default: "ask" },
     yes: { type: "boolean", short: "y" },
+    stream: { type: "boolean", default: true },
+    "no-stream": { type: "boolean" },
   },
 });
+if (args["no-stream"]) args.stream = false;
 
 const MODES: PermissionMode[] = ["ask", "auto", "read-only"];
 const mode = (args.yes ? "auto" : args.mode) as PermissionMode;
@@ -35,10 +38,13 @@ const tools = createCoreRegistry();
 const toolNames = tools.schemas().map((t) => t.name);
 const system = () => buildSystemPrompt({ env: detectEnvironment(cwd), toolNames });
 
+const paint = makeStyler(Boolean(process.stdout.isTTY));
 const reader = new LineReader();
+let running: AbortController | null = null;
+
 const prompter: Prompter = {
   async ask(question) {
-    return parseAnswer(await reader.read(`\n${question}`));
+    return parseAnswer(await reader.read(`\n${paint("yellow", question)}`));
   },
 };
 const permissions = new PermissionManager(mode, prompter, (name) => tools.get(name)?.kind);
@@ -48,31 +54,40 @@ const agent = new Agent({
   tools,
   cwd,
   permissions,
+  stream: args.stream,
   maxTurns: args["max-turns"] ? Number(args["max-turns"]) : undefined,
   system,
-  onEvent(event) {
-    if (event.type === "assistant") {
-      const text = textOf(event.content).trim();
-      if (text) console.log(`\n${text}`);
-    } else if (event.type === "tool_start") {
-      console.log(`  [tool] ${event.call.name} ${JSON.stringify(event.call.input)}`);
-    } else if (event.type === "tool_end") {
-      const firstLine = event.result.content.split("\n")[0].slice(0, 100);
-      console.log(`  [${event.result.is_error ? "error" : "ok"}] ${firstLine}`);
-    } else if (event.type === "tool_denied") {
-      console.log(`  [denied] ${event.reason}`);
-    }
-  },
+  onEvent: createRenderer({ tools }),
+});
+
+// Ctrl+C while working interrupts the agent; Ctrl+C twice while idle exits.
+let lastIdleSigint = 0;
+let lastAbort = 0;
+process.on("SIGINT", () => {
+  if (running) {
+    running.abort();
+    reader.cancel();
+    lastAbort = Date.now();
+    return;
+  }
+  // One keypress can arrive twice: once from the terminal and once relayed by a wrapper like tsx.
+  if (Date.now() - lastAbort < 500) return;
+  if (Date.now() - lastIdleSigint < 2000) process.exit(130);
+  lastIdleSigint = Date.now();
+  process.stdout.write(paint("dim", "\n(press Ctrl+C again to exit)\n> "));
 });
 
 async function handle(input: string) {
+  running = new AbortController();
   try {
-    const result = await agent.run(input);
+    const result = await agent.run(input, { signal: running.signal });
     const { inputTokens, outputTokens } = agent.totalUsage;
     const note = result.stoppedBecause === "done" ? "" : ` | stopped: ${result.stoppedBecause}`;
-    console.log(`\n[turns=${result.turns} | total tokens in=${inputTokens} out=${outputTokens}${note}]\n`);
+    console.log(paint("dim", `\n[turns=${result.turns} | total tokens in=${inputTokens} out=${outputTokens}${note}]\n`));
   } catch (err) {
-    console.error(`Error: ${(err as Error).message}\n`);
+    console.error(paint("red", `Error: ${(err as Error).message}\n`));
+  } finally {
+    running = null;
   }
 }
 

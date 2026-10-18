@@ -6,6 +6,8 @@ export interface ChatRequest {
   tools?: ToolSchema[];
   maxTokens?: number;
   signal?: AbortSignal;
+  /** If set, the provider streams and calls this with each new piece of text. */
+  onText?: (delta: string) => void;
 }
 
 export interface ChatResponse {

@@ -18,6 +18,7 @@ export const editFileTool: Tool<{ path: string; old_string: string; new_string: 
     },
     required: ["path", "old_string", "new_string"],
   },
+  activity: ({ path }) => `Editing ${path}`,
   async run({ path, old_string, new_string, replace_all }, ctx) {
     const abs = resolveInProject(ctx.cwd, path);
     let text: string;

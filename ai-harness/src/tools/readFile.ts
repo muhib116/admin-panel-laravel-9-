@@ -16,6 +16,7 @@ export const readFileTool: Tool<{ path: string; offset?: number; limit?: number 
     },
     required: ["path"],
   },
+  activity: ({ path, offset }) => `Reading ${path}${offset ? ` from line ${offset}` : ""}`,
   async run({ path, offset = 1, limit }, ctx) {
     const abs = resolveInProject(ctx.cwd, path);
     let text: string;

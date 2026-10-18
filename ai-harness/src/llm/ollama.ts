@@ -1,5 +1,6 @@
 import type { ContentBlock, Message, StopReason, ToolSchema } from "../types.js";
 import type { ChatRequest, ChatResponse, LLMProvider } from "./provider.js";
+import { readLines } from "./stream.js";
 
 export const DEFAULT_OLLAMA_MODEL = "qwen2.5-coder:7b";
 
@@ -134,13 +135,44 @@ export class OllamaProvider implements LLMProvider {
   }
 
   async chat(req: ChatRequest): Promise<ChatResponse> {
+    if (req.onText) {
+      const res = await this.post(this.buildBody(req, true), req.signal);
+      return accumulateOllamaStream(readLines(res.body!), req.onText);
+    }
     const res = await this.post(this.buildBody(req, false), req.signal);
     const json = (await res.json()) as OllamaChatResponse;
-    const content = fromOllamaMessage(json.message);
-    return {
-      content,
-      stopReason: mapOllamaStopReason(content, json.done_reason),
-      usage: { inputTokens: json.prompt_eval_count ?? 0, outputTokens: json.eval_count ?? 0 },
-    };
+    return toChatResponse(fromOllamaMessage(json.message), json);
   }
+}
+
+function toChatResponse(content: ContentBlock[], final: OllamaChatResponse | undefined): ChatResponse {
+  return {
+    content,
+    stopReason: mapOllamaStopReason(content, final?.done_reason),
+    usage: { inputTokens: final?.prompt_eval_count ?? 0, outputTokens: final?.eval_count ?? 0 },
+  };
+}
+
+/** Ollama streams newline-delimited JSON: one partial message per line, then a final `done: true` line. */
+export async function accumulateOllamaStream(
+  lines: AsyncIterable<string>,
+  onText: (delta: string) => void = () => {},
+): Promise<ChatResponse> {
+  let text = "";
+  const toolCalls: OllamaToolCall[] = [];
+  let final: OllamaChatResponse | undefined;
+
+  for await (const line of lines) {
+    if (!line.trim()) continue;
+    const chunk = JSON.parse(line) as OllamaChatResponse & { done?: boolean; error?: string };
+    if (chunk.error) throw new Error(`Ollama stream error: ${chunk.error}`);
+    if (chunk.message?.content) {
+      text += chunk.message.content;
+      onText(chunk.message.content);
+    }
+    if (chunk.message?.tool_calls) toolCalls.push(...chunk.message.tool_calls);
+    if (chunk.done) final = chunk;
+  }
+
+  return toChatResponse(fromOllamaMessage({ role: "assistant", content: text, tool_calls: toolCalls }), final);
 }

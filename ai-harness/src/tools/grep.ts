@@ -22,6 +22,7 @@ export const grepTool: Tool<{ pattern: string; path?: string; glob?: string; ign
     },
     required: ["pattern"],
   },
+  activity: ({ pattern, path, glob }) => `Searching for /${pattern}/ in ${path ?? "."}${glob ? ` (${glob})` : ""}`,
   async run({ pattern, path = ".", glob, ignore_case }, ctx) {
     let regex: RegExp;
     try {
