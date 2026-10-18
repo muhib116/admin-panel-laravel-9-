@@ -63,6 +63,12 @@ describe("edit_file", () => {
     );
     expect(await readFile(join(cwd, "b.txt"), "utf8")).toBe("$&y $&y $&y");
   });
+
+  it("explains when old_string was copied with read_file line numbers", async () => {
+    await expect(
+      editFileTool.run({ path: "a.txt", old_string: "     2|two\n     3|three", new_string: "x" }, { cwd }),
+    ).rejects.toThrow(/line-number prefixes \(like "     2\|"\)/);
+  });
 });
 
 describe("write_file", () => {

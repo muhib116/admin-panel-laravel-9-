@@ -1,6 +1,9 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { resolveInProject, ToolError, type Tool } from "./types.js";
 
+/** The `    66|` prefix that read_file adds to each line. */
+const LINE_PREFIX = /^\s*\d+\|/;
+
 export const editFileTool: Tool<{ path: string; old_string: string; new_string: string; replace_all?: boolean }> = {
   name: "edit_file",
   kind: "write",
@@ -31,6 +34,13 @@ export const editFileTool: Tool<{ path: string; old_string: string; new_string: 
 
     const count = old_string ? text.split(old_string).length - 1 : 0;
     if (count === 0) {
+      const lines = old_string.split("\n").filter((l) => l.length);
+      if (lines.length && lines.every((l) => LINE_PREFIX.test(l))) {
+        throw new ToolError(
+          `old_string was not found in ${path}: it contains read_file line-number prefixes (like "${lines[0].match(LINE_PREFIX)![0]}"). ` +
+            `Those are not part of the file. Remove them and use only the text after the "|".`,
+        );
+      }
       throw new ToolError(`old_string was not found in ${path}. Read the file again and copy the text exactly.`);
     }
     if (count > 1 && !replace_all) {
