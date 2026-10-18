@@ -15,6 +15,7 @@ export type AgentEvent =
   | { type: "assistant"; content: ContentBlock[] }
   | { type: "tool_start"; call: ToolUseBlock }
   | { type: "tool_end"; call: ToolUseBlock; result: ToolResultBlock }
+  | { type: "tool_denied"; call: ToolUseBlock; reason: string }
   | { type: "usage"; usage: Usage };
 
 export type StopCause = "done" | "max_turns" | "max_tokens";
@@ -33,6 +34,8 @@ export interface AgentOptions {
   /** Safety valve: maximum model calls per user request. */
   maxTurns?: number;
   maxTokens?: number;
+  /** Gatekeeper consulted before every tool call. Omit to allow everything. */
+  permissions?: { check(call: ToolUseBlock): Promise<{ allowed: true } | { allowed: false; reason: string }> };
   onEvent?: (event: AgentEvent) => void;
 }
 
@@ -97,6 +100,13 @@ export class Agent {
       // matching tool_result in the SAME next user message.
       const results: ToolResultBlock[] = [];
       for (const call of calls) {
+        const decision = (await this.opts.permissions?.check(call)) ?? { allowed: true };
+        if (!decision.allowed) {
+          const denied: ToolResultBlock = { type: "tool_result", tool_use_id: call.id, content: decision.reason, is_error: true };
+          this.emit({ type: "tool_denied", call, reason: decision.reason });
+          results.push(denied);
+          continue;
+        }
         this.emit({ type: "tool_start", call });
         const result = await this.opts.tools.run(call, { cwd: this.opts.cwd });
         this.emit({ type: "tool_end", call, result });

@@ -3,6 +3,7 @@ import { parseArgs } from "node:util";
 import { Agent } from "./agent/loop.js";
 import { buildSystemPrompt, detectEnvironment } from "./context/systemPrompt.js";
 import { createProvider } from "./llm/index.js";
+import { parseAnswer, PermissionManager, type PermissionMode, type Prompter } from "./permissions.js";
 import { createCoreRegistry } from "./tools/index.js";
 import { textOf } from "./types.js";
 import { LineReader } from "./ui/input.js";
@@ -16,8 +17,17 @@ const { values: args, positionals } = parseArgs({
   options: {
     cwd: { type: "string" },
     "max-turns": { type: "string" },
+    mode: { type: "string", default: "ask" },
+    yes: { type: "boolean", short: "y" },
   },
 });
+
+const MODES: PermissionMode[] = ["ask", "auto", "read-only"];
+const mode = (args.yes ? "auto" : args.mode) as PermissionMode;
+if (!MODES.includes(mode)) {
+  console.error(`--mode must be one of ${MODES.join(", ")}`);
+  process.exit(1);
+}
 
 const cwd = resolve(args.cwd ?? process.cwd());
 const provider = createProvider();
@@ -25,10 +35,19 @@ const tools = createCoreRegistry();
 const toolNames = tools.schemas().map((t) => t.name);
 const system = () => buildSystemPrompt({ env: detectEnvironment(cwd), toolNames });
 
+const reader = new LineReader();
+const prompter: Prompter = {
+  async ask(question) {
+    return parseAnswer(await reader.read(`\n${question}`));
+  },
+};
+const permissions = new PermissionManager(mode, prompter, (name) => tools.get(name)?.kind);
+
 const agent = new Agent({
   provider,
   tools,
   cwd,
+  permissions,
   maxTurns: args["max-turns"] ? Number(args["max-turns"]) : undefined,
   system,
   onEvent(event) {
@@ -40,6 +59,8 @@ const agent = new Agent({
     } else if (event.type === "tool_end") {
       const firstLine = event.result.content.split("\n")[0].slice(0, 100);
       console.log(`  [${event.result.is_error ? "error" : "ok"}] ${firstLine}`);
+    } else if (event.type === "tool_denied") {
+      console.log(`  [denied] ${event.reason}`);
     }
   },
 });
@@ -58,12 +79,12 @@ async function handle(input: string) {
 // One-shot mode: `mini-claude "fix the failing test"`
 if (positionals.length) {
   await handle(positionals.join(" "));
+  reader.close();
   process.exit(0);
 }
 
-const reader = new LineReader();
-console.log(`mini-claude using ${provider.name}:${provider.model} in ${cwd}`);
-console.log("(/exit to quit, /history to inspect the conversation, /system to see the system prompt)\n");
+console.log(`mini-claude using ${provider.name}:${provider.model} in ${cwd} (permission mode: ${mode})`);
+console.log("(/exit, /history, /system, /mode <ask|auto|read-only>)\n");
 
 while (true) {
   const raw = await reader.read("> ");
@@ -77,6 +98,12 @@ while (true) {
   }
   if (line === "/system") {
     console.log(system());
+    continue;
+  }
+  if (line.startsWith("/mode")) {
+    const next = line.split(/\s+/)[1] as PermissionMode;
+    if (MODES.includes(next)) permissions.mode = next;
+    console.log(`permission mode: ${permissions.mode}; always-rules: ${[...permissions.rules].join(", ") || "none"}\n`);
     continue;
   }
   await handle(line);

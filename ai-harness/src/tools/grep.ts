@@ -1,6 +1,6 @@
 import { readFile, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { ToolError, type Tool } from "./types.js";
+import { resolveInProject, ToolError, type Tool } from "./types.js";
 import { globToRegExp, walkFiles } from "./walk.js";
 
 const MAX_MATCHES = 100;
@@ -8,6 +8,7 @@ const MAX_FILE_BYTES = 1_000_000;
 
 export const grepTool: Tool<{ pattern: string; path?: string; glob?: string; ignore_case?: boolean }> = {
   name: "grep",
+  kind: "read",
   description:
     "Search file contents with a JavaScript regular expression. Returns `file:line: text` for each match. " +
     "Use it to find where something is defined or used before reading whole files.",
@@ -32,7 +33,7 @@ export const grepTool: Tool<{ pattern: string; path?: string; glob?: string; ign
     const matcher = glob ? globToRegExp(glob) : null;
     const out: string[] = [];
 
-    for await (const file of walkFiles(root, resolve(root, path))) {
+    for await (const file of walkFiles(root, resolveInProject(root, path))) {
       if (matcher && !matcher.test(file)) continue;
       const abs = join(root, file);
       if ((await stat(abs)).size > MAX_FILE_BYTES) continue;

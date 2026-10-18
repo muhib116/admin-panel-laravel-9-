@@ -1,11 +1,12 @@
 import { resolve } from "node:path";
-import type { Tool } from "./types.js";
+import { resolveInProject, type Tool } from "./types.js";
 import { globToRegExp, IGNORED_DIRS, walkFiles } from "./walk.js";
 
 const MAX_RESULTS = 200;
 
 export const listFilesTool: Tool<{ path?: string; pattern?: string }> = {
   name: "list_files",
+  kind: "read",
   description:
     "List files in the project recursively (skips " +
     [...IGNORED_DIRS].join(", ") +
@@ -22,7 +23,7 @@ export const listFilesTool: Tool<{ path?: string; pattern?: string }> = {
     const matcher = pattern ? globToRegExp(pattern) : null;
     const files: string[] = [];
     let total = 0;
-    for await (const file of walkFiles(root, resolve(root, path))) {
+    for await (const file of walkFiles(root, resolveInProject(root, path))) {
       if (matcher && !matcher.test(file)) continue;
       total++;
       if (files.length < MAX_RESULTS) files.push(file);

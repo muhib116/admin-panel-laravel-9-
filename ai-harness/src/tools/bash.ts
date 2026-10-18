@@ -7,6 +7,7 @@ const MAX_OUTPUT_CHARS = 30_000;
 
 export const bashTool: Tool<{ command: string; timeout_ms?: number }> = {
   name: "bash",
+  kind: "execute",
   description:
     "Run a shell command in the project root with bash and return its exit code, stdout and stderr. " +
     "Use it for running tests, git, package managers and other CLI tools. Commands are non-interactive; " +

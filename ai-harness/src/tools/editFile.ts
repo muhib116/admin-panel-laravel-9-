@@ -1,9 +1,9 @@
 import { readFile, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
-import { ToolError, type Tool } from "./types.js";
+import { resolveInProject, ToolError, type Tool } from "./types.js";
 
 export const editFileTool: Tool<{ path: string; old_string: string; new_string: string; replace_all?: boolean }> = {
   name: "edit_file",
+  kind: "write",
   description:
     "Edit a file by replacing an exact string. `old_string` must match the file exactly (including indentation, " +
     "without the line-number prefix from read_file) and must be unique unless replace_all is true. " +
@@ -19,7 +19,7 @@ export const editFileTool: Tool<{ path: string; old_string: string; new_string: 
     required: ["path", "old_string", "new_string"],
   },
   async run({ path, old_string, new_string, replace_all }, ctx) {
-    const abs = resolve(ctx.cwd, path);
+    const abs = resolveInProject(ctx.cwd, path);
     let text: string;
     try {
       text = await readFile(abs, "utf8");
