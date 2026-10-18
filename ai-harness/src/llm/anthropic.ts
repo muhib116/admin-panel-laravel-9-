@@ -1,58 +1,64 @@
-import type { ContentBlock, Message, Usage } from "../types.js";
+import type { ContentBlock, StopReason } from "../types.js";
+import type { ChatRequest, ChatResponse, LLMProvider } from "./provider.js";
 
 const API_URL = "https://api.anthropic.com/v1/messages";
 export const DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-5";
 
-export interface ClaudeReply {
+interface AnthropicResponse {
   content: ContentBlock[];
-  stopReason: string;
-  usage: Usage;
+  stop_reason: string;
+  usage: { input_tokens: number; output_tokens: number };
+}
+
+export function mapAnthropicStopReason(reason: string | null | undefined): StopReason {
+  if (reason === "end_turn" || reason === "tool_use" || reason === "max_tokens") return reason;
+  return "other";
 }
 
 /**
- * One plain HTTP request to the Messages API. This is the ONLY thing the
- * model ever sees: a system string plus the full list of messages. Nothing
- * else is remembered on the server between calls.
+ * Our internal format IS the Anthropic format, so this provider barely
+ * translates anything. Compare with ollama.ts to see what a real translation looks like.
  */
-export async function callClaude(opts: {
-  messages: Message[];
-  system?: string;
-  model?: string;
-  maxTokens?: number;
-}): Promise<ClaudeReply> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not set");
+export class AnthropicProvider implements LLMProvider {
+  readonly name = "anthropic";
 
-  const body = {
-    model: opts.model ?? process.env.ANTHROPIC_MODEL ?? DEFAULT_ANTHROPIC_MODEL,
-    max_tokens: opts.maxTokens ?? 1024,
-    system: opts.system,
-    messages: opts.messages,
-  };
+  constructor(
+    private apiKey: string,
+    readonly model: string = DEFAULT_ANTHROPIC_MODEL,
+  ) {}
 
-  const res = await fetch(API_URL, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) {
-    throw new Error(`Anthropic API error ${res.status}: ${await res.text()}`);
+  protected buildBody(req: ChatRequest) {
+    return {
+      model: this.model,
+      max_tokens: req.maxTokens ?? 4096,
+      system: req.system,
+      messages: req.messages,
+      tools: req.tools?.length ? req.tools : undefined,
+    };
   }
 
-  const json = (await res.json()) as {
-    content: ContentBlock[];
-    stop_reason: string;
-    usage: { input_tokens: number; output_tokens: number };
-  };
+  protected async post(body: unknown, signal?: AbortSignal): Promise<Response> {
+    const res = await fetch(API_URL, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": this.apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify(body),
+      signal,
+    });
+    if (!res.ok) throw new Error(`Anthropic API error ${res.status}: ${await res.text()}`);
+    return res;
+  }
 
-  return {
-    content: json.content,
-    stopReason: json.stop_reason,
-    usage: { inputTokens: json.usage.input_tokens, outputTokens: json.usage.output_tokens },
-  };
+  async chat(req: ChatRequest): Promise<ChatResponse> {
+    const res = await this.post(this.buildBody(req), req.signal);
+    const json = (await res.json()) as AnthropicResponse;
+    return {
+      content: json.content,
+      stopReason: mapAnthropicStopReason(json.stop_reason),
+      usage: { inputTokens: json.usage.input_tokens, outputTokens: json.usage.output_tokens },
+    };
+  }
 }

@@ -1,18 +1,19 @@
-import { callClaude } from "./llm/anthropic.js";
+import { createProvider } from "./llm/index.js";
+import { textOf, type Message } from "./types.js";
 import { LineReader } from "./ui/input.js";
-import type { Message } from "./types.js";
 
 try {
   process.loadEnvFile(".env");
 } catch {}
 
 const system = "You are mini-claude, a helpful assistant running in a terminal.";
+const provider = createProvider();
 
 // The whole "memory" of the chat. Every turn we append to it and resend ALL of it.
 const messages: Message[] = [];
 
 const reader = new LineReader();
-console.log("mini-claude (type /exit to quit, /history to see what gets sent)\n");
+console.log(`mini-claude using ${provider.name}:${provider.model} (/exit to quit, /history to inspect)\n`);
 
 while (true) {
   const raw = await reader.read("> ");
@@ -28,10 +29,9 @@ while (true) {
   messages.push({ role: "user", content: line });
 
   try {
-    const reply = await callClaude({ system, messages });
-    const text = reply.content.map((b) => b.text).join("");
+    const reply = await provider.chat({ system, messages });
     messages.push({ role: "assistant", content: reply.content });
-    console.log(`\n${text}\n`);
+    console.log(`\n${textOf(reply.content)}\n`);
     console.log(
       `[tokens in=${reply.usage.inputTokens} out=${reply.usage.outputTokens} | messages=${messages.length}]\n`,
     );
